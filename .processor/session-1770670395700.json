@@ -1,0 +1,17 @@
+{
+  "sessionId": "session-1770670395700",
+  "status": "completed",
+  "startedAt": "2026-02-09T20:53:15.700935",
+  "completedAt": "2026-02-09T20:53:15.716796",
+  "runs": [],
+  "summary": {
+    "session_id": "session-1770670395700",
+    "status": "completed",
+    "total": 0,
+    "pending": 0,
+    "active": 0,
+    "completed": 0,
+    "failed": 0,
+    "timeout": 0
+  }
+}

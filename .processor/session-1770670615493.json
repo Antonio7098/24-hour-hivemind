@@ -1,0 +1,66 @@
+{
+  "sessionId": "session-1770670615493",
+  "status": "completed",
+  "startedAt": "2026-02-09T20:56:55.493815",
+  "completedAt": "2026-02-09T21:06:55.217563",
+  "runs": [
+    {
+      "id": "SMK-002-1770670615497",
+      "item_id": "SMK-002",
+      "item": {
+        "id": "SMK-002",
+        "target": "CLI discoverability: `hivemind --help` and `hivemind <cmd> --help` are accurate and useful",
+        "priority": "P0",
+        "risk": "High",
+        "status": "\u2610 Not Started",
+        "tier": "Tier 0: Setup & Smoke (must pass before deeper testing)"
+      },
+      "status": "completed",
+      "stage": "processing",
+      "attempt": 0,
+      "max_attempts": 4,
+      "started_at": "2026-02-09T20:56:55.507836",
+      "completed_at": "2026-02-09T21:02:42.287279",
+      "duration_ms": 346779,
+      "error": null,
+      "pid": 20645,
+      "run_dir": "/home/antonio/programming/Hivemind/24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-002",
+      "log_path": "/home/antonio/programming/Hivemind/24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-002/results/agent-SMK-002-1770670615505.log",
+      "output_length": 0
+    },
+    {
+      "id": "SMK-003-1770670962294",
+      "item_id": "SMK-003",
+      "item": {
+        "id": "SMK-003",
+        "target": "Output contract: verify `-f table",
+        "priority": "json",
+        "risk": "yaml` works for `version`, `project list`, `events list`",
+        "status": "P0",
+        "tier": "Tier 0: Setup & Smoke (must pass before deeper testing)"
+      },
+      "status": "failed",
+      "stage": "processing",
+      "attempt": 0,
+      "max_attempts": 4,
+      "started_at": "2026-02-09T21:02:42.302374",
+      "completed_at": "2026-02-09T21:06:55.210868",
+      "duration_ms": 252908,
+      "error": "Stage 'run_agent' failed: Agent exited with code -15",
+      "pid": 24404,
+      "run_dir": "/home/antonio/programming/Hivemind/24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-003",
+      "log_path": "/home/antonio/programming/Hivemind/24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-003/results/agent-SMK-003-1770670962300.log",
+      "output_length": 0
+    }
+  ],
+  "summary": {
+    "session_id": "session-1770670615493",
+    "status": "completed",
+    "total": 2,
+    "pending": 0,
+    "active": 0,
+    "completed": 1,
+    "failed": 1,
+    "timeout": 0
+  }
+}

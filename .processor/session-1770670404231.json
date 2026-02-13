@@ -1,0 +1,42 @@
+{
+  "sessionId": "session-1770670404231",
+  "status": "completed",
+  "startedAt": "2026-02-09T20:53:24.232308",
+  "completedAt": "2026-02-09T20:55:23.743776",
+  "runs": [
+    {
+      "id": "SMK-001-1770670404237",
+      "item_id": "SMK-001",
+      "item": {
+        "id": "SMK-001",
+        "target": "Build `hivemind` with run-local `CARGO_TARGET_DIR`; run `hivemind version`",
+        "priority": "P0",
+        "risk": "High",
+        "status": "\u2610 Not Started",
+        "tier": "Tier 0: Setup & Smoke (must pass before deeper testing)"
+      },
+      "status": "failed",
+      "stage": "processing",
+      "attempt": 0,
+      "max_attempts": 4,
+      "started_at": "2026-02-09T20:53:24.252000",
+      "completed_at": "2026-02-09T20:55:23.723782",
+      "duration_ms": 119471,
+      "error": "Stage 'run_agent' failed: Agent exited with code -15",
+      "pid": 16724,
+      "run_dir": "/home/antonio/programming/Hivemind/24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-001",
+      "log_path": "/home/antonio/programming/Hivemind/24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-001/results/agent-SMK-001-1770670404249.log",
+      "output_length": 0
+    }
+  ],
+  "summary": {
+    "session_id": "session-1770670404231",
+    "status": "completed",
+    "total": 1,
+    "pending": 0,
+    "active": 0,
+    "completed": 0,
+    "failed": 1,
+    "timeout": 0
+  }
+}

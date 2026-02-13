@@ -1,0 +1,32 @@
+{
+  "sut_name": "Hivemind CLI",
+  "sut_version": "local-main",
+  "access": {
+    "instructions": "Build Hivemind locally and point the processor to that binary.\n1. cd Hivemind/hivemind\n2. cargo build --release\n3. export HM=\\\"$(pwd)/target/release/hivemind\\\"\n4. export HIVEMIND_DATA_DIR=\\\"${RUN_DIR:-/tmp/hivemind-beta}/.hivemind-data\\\"\n5. ensure git is installed (>=2.40) and accessible in PATH.",
+    "credentials_key": "HIVEMIND_OPENCODE_API_KEY"
+  },
+  "datasets": {
+    "happy_path": "{{RUN_DIR}}/sandbox-repo/sample.json",
+    "adversarial": "{{RUN_DIR}}/sandbox-repo/adversarial.json"
+  },
+  "environments": {
+    "target": "local",
+    "base_url": "file://{{RUN_DIR}}/sandbox-repo"
+  },
+  "success_criteria": {
+    "max_latency_ms": 500,
+    "min_availability_percent": 99.9,
+    "replay_must_match": true
+  },
+  "runtime": {
+    "type": "opencode",
+    "model": "minimax-coding-plan/MiniMax-M2.5",
+    "vendor": "minimax.io",
+    "install": "Install the OpenCode CLI from minimax.io (Minimax 2.1 build) and ensure it is executable. Set OPENCODE_BIN to the absolute path if not on PATH.",
+    "command": "opencode run --model minimax-coding-plan/MiniMax-M2.1"
+  },
+  "dependencies": {
+    "hivemind_repository": "../../Hivemind/hivemind",
+    "sandbox_repo_template": "{{RUN_DIR}}/sandbox-repo"
+  }
+}
