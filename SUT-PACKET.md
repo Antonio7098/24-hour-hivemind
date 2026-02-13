@@ -10,7 +10,7 @@ You are expected to:
 - Push normal and edge behaviors until something breaks.
 - Report bugs, operator pain, and DX/docs failures with hard evidence.
 
-**Explicit non-goal:** writing unit tests or integration tests for Hivemind internals.
+**Explicit non-goal:** writing unit or integration tests for Hivemind internals.
 
 **Primary goal:** validate production-like CLI behavior under realistic developer usage.
 
@@ -18,8 +18,7 @@ You are expected to:
 
 ## Capability Surface (2026 refresh)
 
-These commands are in scope and should be exercised deeply:
-
+Test and stress these commands:
 - `hivemind version`
 - `hivemind project create|list|inspect|update|runtime-set|attach-repo|detach-repo`
 - `hivemind task create|list|inspect|update|close|start|complete|retry|abort`
@@ -32,37 +31,30 @@ These commands are in scope and should be exercised deeply:
 - `hivemind merge prepare|approve|execute`
 - `hivemind worktree list|inspect|cleanup`
 
-Supported output formats:
-- `-f table` (default)
-- `-f json`
-- `-f yaml`
+Supported formats: `-f table` (default), `-f json`, `-f yaml`.
 
 ---
 
 ## What changed since the old packet
 
-Testers must now assume these are first-class behaviors:
-
-1. **Checkpoint gating is mandatory** for task completion in runtime flows.
+1. **Checkpoint gating is mandatory** before task completion in runtime flows.
 2. **Verification workflow includes human authority controls** (`verify results`, `verify override`).
-3. **Retry behavior is modeful** (`continue` vs `clean`) and must be validated with worktree evidence.
-4. **Flow lifecycle controls** (`pause`, `resume`, `abort`) are operational and should be stress-tested.
-5. **Merge protocol is explicit and multi-step** (`prepare -> approve -> execute`).
+3. **Retry behavior is modeful** (`continue` vs `clean`) and must be validated via worktree/marker evidence.
+4. **Flow lifecycle controls** (`pause`, `resume`, `abort`) are operational and must be stress-tested.
+5. **Merge protocol is explicit and multi-step** (`prepare → approve → execute`).
 6. **Runtime projection events** (commands, tool calls, todo snapshots, narrative output) are part of observability expectations.
 
 ---
 
 ## Mental model for deep testing
 
-Think in these layers:
-
 - **Source of truth:** append-only events.
-- **Derived state:** project/task/graph/flow state reconstructed from events.
-- **Scheduler + runtime:** flow tick executes eligible tasks through adapter contracts.
+- **Derived state:** project/task/graph/flow/merge reconstructed from events.
+- **Scheduler + runtime:** flow tick executes eligible tasks via adapters.
 - **Git boundaries:** worktrees isolate execution; merge integrates approved results.
-- **Human controls:** checkpoints, overrides, pause/resume/abort are safety valves.
+- **Human controls:** checkpoints, overrides, pause/resume/abort safeguard the flow.
 
-**Invariant:** If action/state is not evidenced in events + derived state, treat it as untrusted.
+**Invariant:** If it isn’t evidenced in events and derived state, assume it didn’t happen.
 
 ---
 
@@ -70,90 +62,85 @@ Think in these layers:
 
 ### Roleplay rules
 - Act as a professional engineer under delivery pressure.
-- Use Hivemind to build real artifacts (services, CLIs, docs, data pipelines, frontend modules).
-- Report from operator perspective: "Can I ship with this? What would break at 2am?"
+- Build real artifacts (services, CLIs, docs, data pipelines, frontend modules).
+- Report from the operator perspective: "Would I ship this? What breaks at 2am?"
 
 ### Not allowed
-- No synthetic unit/integration test writing against Hivemind internals.
-- No purely toy interaction with no production-like intent.
+- No synthetic unit/integration tests against Hivemind internals.
+- No purely toy interactions without production intent.
 
 ### Required behavior
-- Start simple, then escalate complexity each run.
-- Intentionally hit failure paths and recovery paths.
-- Always capture minimal reproducible command sequences for suspected bugs.
+- Start simple, escalate complexity each run.
+- Intentionally hit failure and recovery paths.
+- Capture minimal reproducible command sequences for every suspected bug.
 
 ---
 
 ## Environment and isolation requirements
 
-- Hivemind source: `Hivemind/hivemind`
+- Source repo: `Hivemind/hivemind`
 - Runner: `Hivemind/24-hour-hivemind`
 - Runs folder: `Hivemind/24-hour-hivemind/runs`
 
 For every run:
 - Use run-local `HIVEMIND_DATA_DIR` (never `~/.hivemind`).
-- Use run-local sandbox git repo(s).
-- Capture all CLI output to artifacts in the run directory.
+- Use run-local sandbox git repo(s) under `{{RUN_DIR}}`.
+- Capture all CLI output/logs inside the run directory.
 
-Recommended tooling:
-- Rust toolchain (`cargo`, `rustc`)
-- Git
-- `jq`
-- runtime adapter binary (recommended: OpenCode)
+Recommended tooling: Rust toolchain (`cargo`, `rustc`), Git, `jq`, runtime adapter binary (OpenCode recommended).
 
 ---
 
-## Complexity ladder expected by checklist
+## Complexity ladder for checklist items
 
-Checklist items are intentionally staged:
-
-1. **Smoke and contract sanity**
+1. **Smoke / contract sanity**
 2. **Core CRUD + graph correctness**
-3. **Flow/runtime/checkpoint reliability**
-4. **Failure/recovery and operator controls**
-5. **Merge safety, replay determinism, and event audits**
+3. **Flow / runtime / checkpoint reliability**
+4. **Failure, recovery, operator controls**
+5. **Merge safety, replay determinism, event audits**
 6. **Long-running production simulations**
-7. **Industry roleplay scenarios** (fintech, health, ecommerce, devtools, infra)
+7. **Industry roleplay scenarios** (fintech, healthcare, ecommerce, devtools, infra)
 
-Each item should go deep in one area and intentionally hunt edge-case bugs.
+Each checklist item should dig deeply into one area and hunt for edge-case bugs.
 
 ---
 
-## Known high-risk themes to aggressively probe
+## Known high-risk themes
 
-- Active flow safety when repositories/runtime config change mid-flight.
-- Checkpoint race/timing windows and invalid-state completion attempts.
-- Retry mode correctness and worktree state preservation.
-- Flow state transitions under pause/resume/abort in odd timing sequences.
-- Merge correctness under divergence/conflicts/dirty trees.
+- Active flow safety when repos/runtime config change mid-flight.
+- Checkpoint race/timing windows and invalid completion attempts.
+- Retry mode correctness and worktree preservation.
+- Flow state transitions under rapid pause/resume/abort sequences.
+- Merge correctness with divergence/conflicts/dirty trees.
 - Event replay parity with observed state (`events replay --verify`).
-- Exit code and structured error consistency for automation consumers.
+- Exit-code + structured-error consistency for automation consumers.
 
 ---
 
-## Reporting contract (mandatory)
+## Reporting contract
 
-Every checklist run must produce `{ITEM_ID}-FINAL-REPORT.md` in `runs/<timestamp-or-id>/`.
+Every checklist run must produce `{ITEM_ID}-FINAL-REPORT.md` in `{{RUN_DIR}}`.
 
-Include:
-1. Exact commands run (copy/paste ready).
+### Include
+1. Exact commands (copy/paste ready).
 2. Environment snapshot:
    - OS
    - `hivemind --version`
    - `git --version`
    - `HIVEMIND_DATA_DIR`
    - runtime binary + version
-3. Intended developer scenario (what product/problem you were simulating).
+3. Developer scenario roleplay description.
 4. Expected vs actual behavior.
-5. Event evidence (`events stream/list/inspect`), attempt/worktree evidence, and merge evidence where relevant.
-6. Bug list with severity and minimal repro commands.
+5. Evidence: `events stream/list/inspect`, `attempt inspect --diff/--output`, worktree paths, merge artifacts.
+6. Bug list with severity and minimal repro steps.
 7. DX/docs recommendations.
+8. CLI discovery notes (see below).
 
-Severity guide:
-- **Critical:** data loss, false-success, replay mismatch, wrong merge result.
-- **High:** core workflow blocked or stranded without safe recovery.
+### Severity guide
+- **Critical:** data loss, false-success, replay mismatch, incorrect merge result.
+- **High:** core workflow blocked/stranded without safe recovery.
 - **Medium:** recoverable but confusing/fragile behavior.
-- **Low:** polish/documentation/help-text issues.
+- **Low:** polish, documentation, help-text issues.
 
 ---
 
@@ -162,22 +149,23 @@ Severity guide:
 - `Hivemind/hivemind/README.md`
 - `Hivemind/hivemind/docs/overview/quickstart.md`
 - `Hivemind/hivemind/docs/design/cli-operational-semantics.md`
+- `Hivemind/hivemind/docs/overview/principles.md`
 - `Hivemind/hivemind/ops/ROADMAP.md`
 - `Hivemind/hivemind/ops/reports/`
 
 ### Documentation access expectations
-- Navigate the documentation tree locally at `Hivemind/hivemind/docs/`. Treat it as the canonical source for CLI semantics, runtime adapters, and operational guarantees.
-- `Hivemind/hivemind/docs/design/cli-operational-semantics.md` is the contract of record for command behavior; every inconsistency you find between reality and this document must be reported.
-- When docs are silent, outdated, or contradictory, record the exact file + line references and describe the discrepancy in your final report.
+- Navigate `Hivemind/hivemind/docs/` locally; treat it as the canonical source for CLI semantics, runtime adapters, operational guarantees, and product principles.
+- `docs/design/cli-operational-semantics.md` is the contract of record for commands; report any discrepancies.
+- `docs/overview/principles.md` defines the reliability/safety ethos; highlight any behavior that conflicts with these principles.
+- When docs are silent/outdated/contradictory, cite file + line numbers and describe the discrepancy in the final report.
 
 ### CLI discoverability expectations
-- Systematically exercise `hivemind --help`, each top-level subcommand help (e.g., `hivemind flow --help`), and nested command help (e.g., `hivemind flow start --help`).
-- Note any missing examples, ambiguous flag descriptions, or inconsistent formatting.
-- Include a “CLI discovery report” section in your run report summarizing help-text gaps, misleading guidance, or opportunities for better onboarding.
+- Systematically exercise `hivemind --help`, each top-level subcommand help, and nested command help.
+- Note missing examples, ambiguous flag descriptions, inconsistent formatting, or mismatched defaults.
+- Include a "CLI discovery report" section summarizing help-text gaps, misleading guidance, or onboarding improvements.
 
 ---
 
 ## Final reminder
 
-You are a beta tester simulating a real engineer, not a framework tester.
-Treat every run as "Would I trust this for production delivery under pressure?"
+You are a beta tester simulating a real engineer. Treat every run as: "Would I trust this for production delivery under pressure?"

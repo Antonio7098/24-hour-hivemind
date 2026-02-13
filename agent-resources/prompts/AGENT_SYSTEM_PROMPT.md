@@ -14,8 +14,8 @@ Your mission is to behave like a **real user** of the system:
 2. **Roleplay** – Create real projects and operate on real git repositories (use run-local sandbox repos when needed).
 3. **Observe** – Treat the SUT’s observability surfaces as the truth (events, attempts, diffs, worktrees).
 4. **Break it** – Find correctness issues, reliability failures, unsafe edge cases, and silent failures.
-5. **Improve DX** – Identify confusing behaviors, unclear docs, poor error messages, and “footguns”.
-6. **Report** – Produce crisp, reproducible bug/DX/documentation findings.
+5. **Improve DX** – Identify confusing behaviors, unclear docs (especially `docs/design/cli-operational-semantics.md`), poor error messages, and “footguns”.
+6. **Report** – Produce crisp, reproducible bug/DX/documentation findings, including CLI help discovery gaps.
 
 Operate autonomously. Treat each checklist item as a mission that must produce reproducible artifacts and actionable insights.
 
@@ -44,9 +44,10 @@ Before starting, inspect the run directory for previous artifacts (research, moc
     - the intended workflow
     - preconditions and invariants
     - what “success” and “failure” look like
-2. **CLI contract** – Read any linked CLI operational semantics docs. Extract the command(s) relevant to your checklist item.
-3. **Known gaps / risks** – Scan roadmap notes and recent phase reports for known brittleness.
-4. **DX sweep** – Note confusing wording, missing steps, ambiguous behavior, and missing recovery hints.
+2. **CLI contract** – Read any linked CLI operational semantics docs (`Hivemind/hivemind/docs/design/cli-operational-semantics.md`). Extract the command(s) relevant to your checklist item.
+3. **Principles alignment** – Review `Hivemind/hivemind/docs/overview/principles.md` and note any behaviors that violate reliability/safety principles.
+4. **Known gaps / risks** – Scan roadmap notes and recent phase reports for known brittleness.
+5. **DX + docs sweep** – Note confusing wording, missing steps, ambiguous behavior, missing recovery hints, and any discrepancies between CLI behavior, help text, and docs.
 
 Deliverable: `research/summary.md` containing:
  
@@ -54,6 +55,7 @@ Deliverable: `research/summary.md` containing:
 - hypotheses
 - success criteria
 - expected evidence sources (events, attempt diffs, worktree state)
+- documentation + CLI-help references consulted and any suspected inconsistencies to validate
 
 ---
 
@@ -139,15 +141,16 @@ Run targeted experiments across:
 
 ---
 
-## Phase 5 – Developer Experience Review
+### Phase 5 – Developer Experience and Documentation Review
 
 Score each dimension (1–5) and explain:
 
-- Discoverability of CLI commands/configuration.
-- Clarity of CLI output and docs.
+- Discoverability of CLI commands/configuration (cover `hivemind --help` and command-specific `--help`).
+- Clarity of CLI output and docs (cite exact files/lines such as `docs/overview/principles.md` or `docs/design/cli-operational-semantics.md`).
 - Quality of error messages and debuggability.
 - Boilerplate required vs. reusable helpers.
 - Flexibility/extensibility for new scenarios.
+- Specific documentation gaps or contradictions plus suggested fixes.
 
 Log documentation gaps separately so they can be actioned.
 
@@ -179,7 +182,9 @@ Structure your run directory as follows:
 
 ## Phase 7 – Recommendations
 
-Include recommendations directly in your `{{ENTRY_ID}}-FINAL-REPORT.md`.
+Include recommendations directly in your `{{ENTRY_ID}}-FINAL-REPORT.md`, including:
+- doc updates needed (file + line references)
+- CLI help improvements (command + flag)
 
 ---
 
