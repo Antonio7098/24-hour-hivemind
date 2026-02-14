@@ -17,7 +17,7 @@ The Stageflow pipeline continuously:
 
 1. Parses the mission brief + backlog.
 2. Builds prompts per checklist item.
-3. Spawns OpenCode or Claude Code agents (`opencode run --model …` / `claude code …`).
+3. Spawns OpenCode, Claude Code, or Kilo agents (`opencode run --model …` / `claude code …` / `kilo run --model …`).
 4. Validates completion markers and final reports.
 5. Writes back status to the checklist.
 6. Generates stakeholder-ready tier summaries once an entire tier is ✅.
@@ -44,6 +44,7 @@ The processor **does not** inject permission flags. Configure your binaries up-f
 
 - **OpenCode** – enable `bypassPermissions` (or equivalent) in your profile; override `OPENCODE_BIN` if you need a wrapper.
 - **Claude Code** – ensure `claude code` always runs with `--dangerously-skip-permissions`; wrap it if necessary and point `CLAUDE_CODE_BIN` to the wrapper.
+- **Kilo** – ensure `kilo` is installed and available on PATH; override `KILO_BIN` if needed. Kilo uses `--auto` flag for non-interactive mode.
 
 ### 3. Install Dependencies
 
@@ -77,6 +78,12 @@ python -m processor.cli run \
   --mode finite \
   --runtime claude-code \
   --model anthropic/claude-3-5-sonnet-20241022
+
+# Kilo runtime with default model
+python -m processor.cli run \
+  --batch-size 5 \
+  --mode finite \
+  --runtime kilo
 
 # Dry run to see which rows would be processed
 python -m processor.cli run --dry-run
@@ -128,7 +135,7 @@ CLI flags override these defaults:
 |------|-------------|
 | `--batch-size N` | Number of checklist rows processed in parallel. |
 | `--mode {finite,infinite}` | Stop at ✅ or keep synthesizing backlog. |
-| `--runtime {opencode,claude-code}` | Agent runtime. |
+| `--runtime {opencode,claude-code,kilo}` | Agent runtime. |
 | `--model SLUG` | Model slug for the runtime. |
 | `--timeout MS` | Agent execution timeout. |
 | `--dry-run` | Build prompts but skip agent subprocesses. |
@@ -142,6 +149,7 @@ export AGENT_RUNTIME=claude-code
 export AGENT_MODEL=claude-3-5-sonnet-20241022
 export OPENCODE_BIN=/usr/local/bin/opencode
 export CLAUDE_CODE_BIN=/usr/local/bin/claude
+export KILO_BIN=/usr/local/bin/kilo
 ```
 
 ---

@@ -34,24 +34,28 @@ def get_default_agent_resources_dir() -> Path:
 
 class ProcessingMode(str, Enum):
     """Processing mode for the checklist processor."""
+
     FINITE = "finite"
     INFINITE = "infinite"
 
 
 class AgentRuntime(str, Enum):
     """Supported agent runtimes."""
+
     OPENCODE = "opencode"
     CLAUDE_CODE = "claude-code"
+    KILO = "kilo"
 
 
 @dataclass
 class RuntimeConfig:
     """Configuration for a specific agent runtime."""
+
     label: str
     default_model: str
     command_env: str
     default_command: str
-    
+
     def build_args(self, model: str) -> list[str]:
         """Build command line arguments for this runtime."""
         raise NotImplementedError
@@ -60,11 +64,12 @@ class RuntimeConfig:
 @dataclass
 class OpenCodeConfig(RuntimeConfig):
     """OpenCode runtime configuration."""
+
     label: str = "OpenCode"
     default_model: str = "minimax-coding-plan/MiniMax-M2.1"
     command_env: str = "OPENCODE_BIN"
     default_command: str = "opencode"
-    
+
     def build_args(self, model: str) -> list[str]:
         return ["run", "--model", model]
 
@@ -72,18 +77,33 @@ class OpenCodeConfig(RuntimeConfig):
 @dataclass
 class ClaudeCodeConfig(RuntimeConfig):
     """Claude Code runtime configuration."""
+
     label: str = "Claude Code"
     default_model: str = "claude-4.5-sonnet"
     command_env: str = "CLAUDE_CODE_BIN"
     default_command: str = "claude"
-    
+
     def build_args(self, model: str) -> list[str]:
         return ["code", "--model", model]
+
+
+@dataclass
+class KiloConfig(RuntimeConfig):
+    """Kilo runtime configuration."""
+
+    label: str = "Kilo"
+    default_model: str = "kilo/z-ai/glm-5:free"
+    command_env: str = "KILO_BIN"
+    default_command: str = "kilo"
+
+    def build_args(self, model: str) -> list[str]:
+        return ["run", "--model", model, "--auto"]
 
 
 RUNTIME_CONFIGS: dict[AgentRuntime, RuntimeConfig] = {
     AgentRuntime.OPENCODE: OpenCodeConfig(),
     AgentRuntime.CLAUDE_CODE: ClaudeCodeConfig(),
+    AgentRuntime.KILO: KiloConfig(),
 }
 
 
@@ -95,19 +115,20 @@ class TimeoutConfig:
     timeouts are scaled relative to this base value using multipliers.
     Otherwise, hardcoded defaults are used.
     """
+
     # Priority multipliers (relative to base timeout)
-    p0_critical_multiplier: float = 1.5   # 150% of base for critical items
-    p1_high_multiplier: float = 1.2       # 120% of base for high priority
-    p1_medium_multiplier: float = 1.0     # 100% of base for medium priority
-    p2_low_multiplier: float = 1.0        # 100% of base for low priority
-    default_multiplier: float = 1.0       # 100% of base for unspecified priority
+    p0_critical_multiplier: float = 1.5  # 150% of base for critical items
+    p1_high_multiplier: float = 1.2  # 120% of base for high priority
+    p1_medium_multiplier: float = 1.0  # 100% of base for medium priority
+    p2_low_multiplier: float = 1.0  # 100% of base for low priority
+    default_multiplier: float = 1.0  # 100% of base for unspecified priority
 
     # Hardcoded defaults (used only when base_timeout_ms is not provided)
-    p0_critical_ms: int = 900000   # 15 minutes
-    p1_high_ms: int = 720000       # 12 minutes
-    p1_medium_ms: int = 600000     # 10 minutes
-    p2_low_ms: int = 600000        # 10 minutes
-    default_ms: int = 600000       # 10 minutes
+    p0_critical_ms: int = 900000  # 15 minutes
+    p1_high_ms: int = 720000  # 12 minutes
+    p1_medium_ms: int = 600000  # 10 minutes
+    p2_low_ms: int = 600000  # 10 minutes
+    default_ms: int = 600000  # 10 minutes
 
     # Base timeout override (typically from CLI --timeout)
     base_timeout_ms: int | None = None
@@ -172,13 +193,20 @@ class TimeoutConfig:
 @dataclass
 class RetryConfig:
     """Progressive retry policy configuration."""
+
     max_retries: int = 3
     base_delay_ms: int = 5000
     max_delay_ms: int = 30000
     backoff_multiplier: float = 2.0
-    retryable_errors: list[str] = field(default_factory=lambda: [
-        "ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EPIPE", "ENOTFOUND"
-    ])
+    retryable_errors: list[str] = field(
+        default_factory=lambda: [
+            "ETIMEDOUT",
+            "ECONNRESET",
+            "ECONNREFUSED",
+            "EPIPE",
+            "ENOTFOUND",
+        ]
+    )
 
     # Progressive retry modes
     # Attempt 1: Full run
@@ -199,6 +227,7 @@ class ProcessorConfig:
                         If not specified, falls back to repo_root/agent-resources
                         or package default.
     """
+
     repo_root: Path
     checklist_path: Path | None = None
     mission_brief_path: Path | None = None
@@ -241,7 +270,9 @@ class ProcessorConfig:
 
         # Set base timeout on TimeoutConfig if CLI timeout was provided
         # This ensures priority-based timeouts scale from the CLI value
-        if self.timeout_ms != 300000:  # 300000 is the default, any other value is user-provided
+        if (
+            self.timeout_ms != 300000
+        ):  # 300000 is the default, any other value is user-provided
             self.timeouts.base_timeout_ms = self.timeout_ms
 
         # Resolve agent resources directory (supports override for custom deployments)
@@ -256,7 +287,9 @@ class ProcessorConfig:
                 self.agent_resources_dir = repo_resources
             else:
                 pkg_default = get_default_agent_resources_dir()
-                self.agent_resources_dir = pkg_default if pkg_default else repo_resources
+                self.agent_resources_dir = (
+                    pkg_default if pkg_default else repo_resources
+                )
 
         # Resolve default paths
         if self.checklist_path is None:
@@ -277,7 +310,9 @@ class ProcessorConfig:
 
         # Use agent_resources_dir for prompt path if not explicitly set
         if self.agent_prompt_path is None:
-            self.agent_prompt_path = self.agent_resources_dir / "prompts" / "AGENT_SYSTEM_PROMPT.md"
+            self.agent_prompt_path = (
+                self.agent_resources_dir / "prompts" / "AGENT_SYSTEM_PROMPT.md"
+            )
         else:
             self.agent_prompt_path = Path(self.agent_prompt_path)
             if not self.agent_prompt_path.is_absolute():
@@ -306,22 +341,22 @@ class ProcessorConfig:
 
         if self.timeout_ms < 1000:
             raise ValueError(f"timeout_ms must be >= 1000, got {self.timeout_ms}")
-    
+
     def get_runtime_config(self) -> RuntimeConfig:
         """Get the configuration for the selected runtime."""
         return RUNTIME_CONFIGS[self.runtime]
-    
+
     def get_runtime_command(self) -> str:
         """Get the command to invoke the runtime."""
         config = self.get_runtime_config()
         return os.environ.get(config.command_env, config.default_command)
-    
+
     def get_model(self) -> str:
         """Get the model to use, defaulting to runtime default."""
         if self.model:
             return self.model
         return self.get_runtime_config().default_model
-    
+
     def ensure_directories(self) -> None:
         """Ensure required directories exist."""
         self.runs_dir.mkdir(parents=True, exist_ok=True)
