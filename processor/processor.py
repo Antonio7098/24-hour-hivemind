@@ -114,7 +114,9 @@ class ChecklistProcessor:
             require_final_report=True,  # Strict: must have FINAL_REPORT.md
         )
 
-        self.update_status_stage = UpdateStatusStage(parser=self.parser)
+        self.update_status_stage = UpdateStatusStage(
+            parser=self.parser, runs_dir=self.config.runs_dir
+        )
 
         # Use agent_resources_dir from config (supports override)
         tier_report_path = (
@@ -373,13 +375,27 @@ class ChecklistProcessor:
             logger.error(f"Failed {item.id}: {e}", extra={"error_type": error_type})
             run.set_status(AgentStatus.FAILED, str(e))
 
-            # Update status to failed
+            # Check if there's a checkpoint to resume from
+            has_checkpoint = False
+            if self.config.enable_checkpoints and run_dir:
+                checkpoint_manager = CheckpointManager(self.config.runs_dir)
+                has_checkpoint = checkpoint_manager.can_resume(run_dir, item.id)
+
+            # Update status - paused if checkpoint exists, failed otherwise
             try:
-                await self.parser.update_item_status(item.id, "❌ Failed")
+                status = "⏸️ Paused" if has_checkpoint else "❌ Failed"
+                await self.parser.update_item_status(item.id, status)
+                if has_checkpoint:
+                    logger.info(f"Item {item.id} paused with checkpoint for resumption")
             except Exception as update_err:
                 logger.error(f"Failed to update status: {update_err}")
 
-            return {"success": False, "run": run, "error": str(e)}
+            return {
+                "success": False,
+                "run": run,
+                "error": str(e),
+                "has_checkpoint": has_checkpoint,
+            }
 
     async def process(self) -> ProcessingResult:
         """
