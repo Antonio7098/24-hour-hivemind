@@ -29,10 +29,11 @@ COMPLETION_MARKER = "ITEM_COMPLETE"
 # Early warning thresholds (seconds)
 NO_OUTPUT_WARNING_THRESHOLD = 120  # Warn if no output for 2 minutes
 RESEARCH_PHASE_WARNING_THRESHOLD = 180  # Warn if research takes > 3 minutes
+PROGRESS_INTERVAL = 15  # Show progress every 15 seconds
 
 
 class OutputMonitor:
-    """Monitors agent output for early warning detection."""
+    """Monitors agent output for early warning detection and progress."""
 
     def __init__(self, item_id: str, log_path: Path):
         self.item_id = item_id
@@ -41,6 +42,8 @@ class OutputMonitor:
         self.total_bytes = 0
         self.warnings_emitted: set[str] = set()
         self.phase_start_times: dict[str, float] = {}
+        self.last_progress_time = time.time()
+        self.current_phase = "init"
 
     def on_output(self, data: bytes, ctx: StageContext | None = None) -> None:
         """Called when output is received."""
@@ -59,10 +62,43 @@ class OutputMonitor:
             text = data.decode(errors="replace").lower()
             if "research" in text and "research" not in self.phase_start_times:
                 self.phase_start_times["research"] = time.time()
+                self.current_phase = "research"
             elif "test" in text and "tests" not in self.phase_start_times:
                 self.phase_start_times["tests"] = time.time()
+                self.current_phase = "tests"
             elif "execut" in text and "execution" not in self.phase_start_times:
                 self.phase_start_times["execution"] = time.time()
+                self.current_phase = "execution"
+            elif "report" in text:
+                self.current_phase = "report"
+
+    def check_progress(
+        self, start_time: float, ctx: StageContext | None = None
+    ) -> None:
+        """Check and emit progress updates."""
+        now = time.time()
+        if now - self.last_progress_time >= PROGRESS_INTERVAL:
+            self.last_progress_time = now
+            elapsed = int(now - start_time)
+
+            ctx.try_emit_event(
+                "agent.progress",
+                {
+                    "item_id": self.item_id,
+                    "elapsed_sec": elapsed,
+                    "phase": self.current_phase,
+                    "bytes_received": self.total_bytes,
+                },
+            )
+
+            logger.info(
+                f"Progress: {elapsed}s elapsed, {self.total_bytes // 1024}KB received",
+                extra={
+                    "item_id": self.item_id,
+                    "phase": self.current_phase,
+                    "elapsed": elapsed,
+                },
+            )
 
     def check_warnings(self, ctx: StageContext | None = None) -> list[str]:
         """Check for warning conditions. Returns list of warnings."""
@@ -79,11 +115,14 @@ class OutputMonitor:
                 warnings.append(msg)
                 logger.warning(f"[{self.item_id}] {msg}")
                 if ctx:
-                    ctx.try_emit_event("agent.warning", {
-                        "item_id": self.item_id,
-                        "warning": "no_output",
-                        "duration_sec": int(silence_duration),
-                    })
+                    ctx.try_emit_event(
+                        "agent.warning",
+                        {
+                            "item_id": self.item_id,
+                            "warning": "no_output",
+                            "duration_sec": int(silence_duration),
+                        },
+                    )
 
         # Check research phase duration
         if "research" in self.phase_start_times:
@@ -109,7 +148,9 @@ class RunAgentStage:
         self.config = config
         self._active_processes: dict[str, asyncio.subprocess.Process] = {}
         self._monitors: dict[str, OutputMonitor] = {}
-        self._checkpoint_manager = CheckpointManager(config.runs_dir) if config.enable_checkpoints else None
+        self._checkpoint_manager = (
+            CheckpointManager(config.runs_dir) if config.enable_checkpoints else None
+        )
 
     def _build_command(self) -> tuple[str, list[str]]:
         """Build the command and arguments for the agent runtime."""
@@ -128,7 +169,9 @@ class RunAgentStage:
         if checkpoint.phase == Phase.INIT:
             return prompt
 
-        resume_instructions = self._checkpoint_manager.get_resume_instructions(checkpoint)
+        resume_instructions = self._checkpoint_manager.get_resume_instructions(
+            checkpoint
+        )
         if resume_instructions:
             # Insert resume instructions after the main prompt header
             return f"{prompt}\n\n{resume_instructions}"
@@ -144,7 +187,9 @@ class RunAgentStage:
 
         item_id = ctx.inputs.get_from("build_prompt", "item_id")
         run_dir = ctx.inputs.get_from("build_prompt", "run_dir")
-        completion_marker = ctx.inputs.get_from("build_prompt", "completion_marker", default=COMPLETION_MARKER)
+        completion_marker = ctx.inputs.get_from(
+            "build_prompt", "completion_marker", default=COMPLETION_MARKER
+        )
 
         # Get item and run tracking from context metadata
         metadata = ctx.snapshot.metadata or {}
@@ -173,12 +218,18 @@ class RunAgentStage:
             # On retry attempts, try to resume from checkpoint
             if attempt > 1 and self.config.retry.use_checkpoint_on_retry:
                 if checkpoint.phase not in (Phase.INIT, Phase.COMPLETE):
-                    logger.info(f"Resuming {item_id} from checkpoint: phase={checkpoint.phase.value}")
+                    logger.info(
+                        f"Resuming {item_id} from checkpoint: phase={checkpoint.phase.value}"
+                    )
                     prompt = self._build_resume_prompt(prompt, checkpoint)
                     checkpoint.attempt = attempt
 
         # Get dynamic timeout based on priority
-        timeout_ms = self._get_timeout_for_item(item, attempt) if item else self.config.timeout_ms
+        timeout_ms = (
+            self._get_timeout_for_item(item, attempt)
+            if item
+            else self.config.timeout_ms
+        )
         timeout_sec = timeout_ms / 1000
 
         # Build command
@@ -190,7 +241,9 @@ class RunAgentStage:
         else:
             log_dir = Path(normalize_path(self.config.state_dir))
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / f"agent-{item_id}-{int(datetime.now().timestamp() * 1000)}.log"
+        log_path = (
+            log_dir / f"agent-{item_id}-{int(datetime.now().timestamp() * 1000)}.log"
+        )
 
         # Write log header
         with open(log_path, "w") as f:
@@ -209,14 +262,29 @@ class RunAgentStage:
         self._monitors[item_id] = monitor
 
         # Emit start event
-        ctx.try_emit_event("agent.started", {
-            "item_id": item_id,
-            "runtime": self.config.runtime.value,
-            "model": self.config.get_model(),
-            "timeout_ms": timeout_ms,
-            "attempt": attempt,
-            "resuming_from": checkpoint.phase.value if checkpoint and checkpoint.phase != Phase.INIT else None,
-        })
+        ctx.try_emit_event(
+            "agent.started",
+            {
+                "item_id": item_id,
+                "runtime": self.config.runtime.value,
+                "model": self.config.get_model(),
+                "timeout_ms": timeout_ms,
+                "attempt": attempt,
+                "resuming_from": checkpoint.phase.value
+                if checkpoint and checkpoint.phase != Phase.INIT
+                else None,
+            },
+        )
+
+        # Log agent start
+        logger.info(
+            f"Agent started for {item_id}",
+            extra={
+                "item_id": item_id,
+                "timeout_sec": int(timeout_sec),
+                "model": self.config.get_model(),
+            },
+        )
 
         try:
             # Spawn process
@@ -250,22 +318,25 @@ class RunAgentStage:
 
             async def read_stream(stream, is_stderr=False):
                 """Read from stream and update monitor."""
+                nonlocal last_warning_check
                 while True:
                     # Check if overall timeout has been exceeded
                     elapsed = time.time() - start_time
                     if elapsed > timeout_sec:
                         # Timeout exceeded - exit loop
                         break
-                    
+
+                    # Check and emit progress
+                    monitor.check_progress(start_time, ctx)
+
                     try:
                         # Use a shorter timeout to allow frequent checks
                         read_timeout = min(10.0, timeout_sec - elapsed + 1)
                         if read_timeout <= 0:
                             break
-                            
+
                         chunk = await asyncio.wait_for(
-                            stream.read(4096),
-                            timeout=read_timeout
+                            stream.read(4096), timeout=read_timeout
                         )
                         if not chunk:
                             break
@@ -276,7 +347,6 @@ class RunAgentStage:
                         if process.returncode is not None:
                             break
                         # Check for warnings during read timeout
-                        nonlocal last_warning_check
                         now = time.time()
                         if now - last_warning_check > warning_check_interval:
                             monitor.check_warnings(ctx)
@@ -287,17 +357,19 @@ class RunAgentStage:
 
             # Create tasks for reading both streams with watchdog timeout
             stdout_task = asyncio.create_task(read_stream(process.stdout))
-            stderr_task = asyncio.create_task(read_stream(process.stderr, is_stderr=True))
-            
+            stderr_task = asyncio.create_task(
+                read_stream(process.stderr, is_stderr=True)
+            )
+
             timed_out = False
             try:
                 # Use asyncio.wait with timeout for proper cancellation
                 done, pending = await asyncio.wait(
                     [stdout_task, stderr_task],
                     timeout=timeout_sec,
-                    return_when=asyncio.ALL_COMPLETED
+                    return_when=asyncio.ALL_COMPLETED,
                 )
-                
+
                 # Cancel any pending tasks (shouldn't happen unless timeout)
                 for task in pending:
                     task.cancel()
@@ -305,7 +377,7 @@ class RunAgentStage:
                         await task
                     except asyncio.CancelledError:
                         pass
-                
+
                 # Check if tasks completed or timed out
                 if stdout_task in done and stderr_task in done:
                     # Both completed - check exit code
@@ -313,7 +385,7 @@ class RunAgentStage:
                 else:
                     # Timeout occurred
                     raise asyncio.TimeoutError()
-                    
+
             except asyncio.TimeoutError:
                 timed_out = True
                 elapsed = time.time() - start_time
@@ -324,24 +396,35 @@ class RunAgentStage:
                     if detected_phase != checkpoint.phase:
                         checkpoint.phase = detected_phase
                         checkpoint.elapsed_ms = int(elapsed * 1000)
-                        checkpoint.add_error(f"Timeout after {elapsed:.0f}s at phase {detected_phase.value}")
+                        checkpoint.add_error(
+                            f"Timeout after {elapsed:.0f}s at phase {detected_phase.value}"
+                        )
                         self._checkpoint_manager.save(run_dir_path, checkpoint)
-                        logger.info(f"Saved checkpoint for {item_id}: phase={detected_phase.value}")
+                        logger.info(
+                            f"Saved checkpoint for {item_id}: phase={detected_phase.value}"
+                        )
 
                 # Write timeout info to log
                 with open(log_path, "a") as f:
                     f.write(f"\n{'=' * 50}\n")
-                    f.write(f"TIMEOUT after {elapsed:.0f}s (limit: {timeout_sec:.0f}s)\n")
-                    f.write(f"Phase reached: {detected_phase.value if checkpoint else 'unknown'}\n")
+                    f.write(
+                        f"TIMEOUT after {elapsed:.0f}s (limit: {timeout_sec:.0f}s)\n"
+                    )
+                    f.write(
+                        f"Phase reached: {detected_phase.value if checkpoint else 'unknown'}\n"
+                    )
                     f.write(f"Output bytes: {monitor.total_bytes}\n")
 
-                ctx.try_emit_event("agent.timeout", {
-                    "item_id": item_id,
-                    "timeout_ms": timeout_ms,
-                    "elapsed_ms": int(elapsed * 1000),
-                    "phase_reached": detected_phase.value if checkpoint else None,
-                    "output_bytes": monitor.total_bytes,
-                })
+                ctx.try_emit_event(
+                    "agent.timeout",
+                    {
+                        "item_id": item_id,
+                        "timeout_ms": timeout_ms,
+                        "elapsed_ms": int(elapsed * 1000),
+                        "phase_reached": detected_phase.value if checkpoint else None,
+                        "output_bytes": monitor.total_bytes,
+                    },
+                )
 
                 # Kill the process
                 process.terminate()
@@ -359,7 +442,8 @@ class RunAgentStage:
                         "phase_reached": detected_phase.value if checkpoint else None,
                         "output_bytes": monitor.total_bytes,
                         "retryable": True,
-                        "has_checkpoint": checkpoint is not None and checkpoint.phase != Phase.INIT,
+                        "has_checkpoint": checkpoint is not None
+                        and checkpoint.phase != Phase.INIT,
                     },
                 )
 
@@ -381,11 +465,14 @@ class RunAgentStage:
 
             # Check exit code
             if process.returncode != 0:
-                ctx.try_emit_event("agent.failed", {
-                    "item_id": item_id,
-                    "exit_code": process.returncode,
-                    "output_bytes": len(output),
-                })
+                ctx.try_emit_event(
+                    "agent.failed",
+                    {
+                        "item_id": item_id,
+                        "exit_code": process.returncode,
+                        "output_bytes": len(output),
+                    },
+                )
                 return StageOutput.fail(
                     error=f"Agent exited with code {process.returncode}",
                     data={
@@ -399,11 +486,14 @@ class RunAgentStage:
             # Check for completion marker
             has_marker = completion_marker in output
 
-            ctx.try_emit_event("agent.completed", {
-                "item_id": item_id,
-                "has_completion_marker": has_marker,
-                "output_length": len(output),
-            })
+            ctx.try_emit_event(
+                "agent.completed",
+                {
+                    "item_id": item_id,
+                    "has_completion_marker": has_marker,
+                    "output_length": len(output),
+                },
+            )
 
             # Delete checkpoint on successful completion
             if has_marker and self._checkpoint_manager and run_dir_path:
@@ -418,11 +508,14 @@ class RunAgentStage:
             )
 
         except Exception as e:
-            ctx.try_emit_event("agent.error", {
-                "item_id": item_id,
-                "error": str(e),
-                "error_type": type(e).__name__,
-            })
+            ctx.try_emit_event(
+                "agent.error",
+                {
+                    "item_id": item_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
             return StageOutput.fail(
                 error=f"Agent execution failed: {e}",
                 data={
