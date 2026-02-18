@@ -121,29 +121,6 @@ class CleanFormatter(logging.Formatter):
                 lines.append(f"  {self._color('dim')}Target: {target}{self._reset()}")
             return "\n".join(lines)
 
-        if "Progress:" in message:
-            elapsed = extra.get("elapsed", 0)
-            phase = extra.get("phase", "working")
-            item = extra.get("item_id", "")
-            kb = 0
-            if "KB" in message:
-                try:
-                    kb = int(message.split()[1].replace("KB", ""))
-                except:
-                    pass
-            mins = elapsed // 60
-            secs = elapsed % 60
-            time_str = f"{mins}:{secs:02d}" if mins > 0 else f"{secs}s"
-            return (
-                f"  {self._color('dim')}⏳ {time_str} | {phase} | {kb}KB{self._reset()}"
-            )
-
-        if "Agent started" in message:
-            timeout = extra.get("timeout_sec", 0)
-            model = extra.get("model", "")
-            mins = timeout // 60
-            return f"  {self._color('dim')}⚙ Agent running (timeout: {mins}m){self._reset()}"
-
         if "Completed" in message:
             item_id = message.split("Completed")[1].strip()
             duration = extra.get("duration_ms", 0)
@@ -232,6 +209,27 @@ class CleanFormatter(logging.Formatter):
         self, record: logging.LogRecord, message: str, extra: dict
     ) -> str:
         """Format run_agent logs."""
+        if "Progress:" in message:
+            elapsed = extra.get("elapsed", 0)
+            phase = extra.get("phase", "working")
+            kb = 0
+            if "KB" in message:
+                try:
+                    kb = int(message.split()[1].replace("KB", ""))
+                except:
+                    pass
+            mins = elapsed // 60
+            secs = elapsed % 60
+            time_str = f"{mins}:{secs:02d}" if mins > 0 else f"{secs}s"
+            return (
+                f"  {self._color('dim')}⏳ {time_str} | {phase} | {kb}KB{self._reset()}"
+            )
+
+        if "Agent started" in message:
+            timeout = extra.get("timeout_sec", 0)
+            mins = timeout // 60
+            return f"  {self._color('dim')}⚙ Agent running (timeout: {mins}m){self._reset()}"
+
         if "Resuming" in message and "checkpoint" in message:
             phase = message.split("phase=")[1] if "phase=" in message else "unknown"
             return f"  {self._color('yellow')}↻ Resuming from {phase}{self._reset()}"
