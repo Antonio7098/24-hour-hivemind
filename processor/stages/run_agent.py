@@ -35,15 +35,24 @@ PROGRESS_INTERVAL = 15  # Show progress every 15 seconds
 class OutputMonitor:
     """Monitors agent output for early warning detection and progress."""
 
-    def __init__(self, item_id: str, log_path: Path):
+    def __init__(self, item_id: str, log_path: Path, initial_phase: str = "init"):
         self.item_id = item_id
         self.log_path = log_path
         self.last_output_time = time.time()
         self.total_bytes = 0
         self.warnings_emitted: set[str] = set()
-        self.phase_start_times: dict[str, float] = {}
+        self.phase_start_times: dict[str, float] = {"init": time.time()}
         self.last_progress_time = time.time()
-        self.current_phase = "init"
+        self.current_phase = initial_phase
+        self.completed_phases: list[str] = []
+
+        # If resuming from a specific phase, mark previous phases as completed
+        phase_order = ["init", "research", "tests", "execution", "report"]
+        if initial_phase in phase_order:
+            idx = phase_order.index(initial_phase)
+            self.completed_phases = phase_order[:idx]
+            for p in self.completed_phases:
+                self.phase_start_times[p] = time.time()
 
     def on_output(self, data: bytes, ctx: StageContext | None = None) -> None:
         """Called when output is received."""
@@ -51,26 +60,37 @@ class OutputMonitor:
             self.last_output_time = time.time()
             self.total_bytes += len(data)
 
-            # Append to log file in real-time
             try:
                 with open(self.log_path, "ab") as f:
                     f.write(data)
             except Exception as e:
                 logger.warning(f"Failed to write to log: {e}")
 
-            # Detect phase transitions from output
             text = data.decode(errors="replace").lower()
-            if "research" in text and "research" not in self.phase_start_times:
-                self.phase_start_times["research"] = time.time()
-                self.current_phase = "research"
-            elif "test" in text and "tests" not in self.phase_start_times:
-                self.phase_start_times["tests"] = time.time()
-                self.current_phase = "tests"
-            elif "execut" in text and "execution" not in self.phase_start_times:
-                self.phase_start_times["execution"] = time.time()
-                self.current_phase = "execution"
-            elif "report" in text:
-                self.current_phase = "report"
+            self._detect_phase(text)
+
+    def _detect_phase(self, text: str) -> None:
+        """Detect phase transition from output text."""
+        phase_keywords = {
+            "research": "research",
+            "tests": "tests",
+            "test_": "tests",
+            "execut": "execution",
+            "implement": "execution",
+            "report": "report",
+            "final_report": "report",
+        }
+
+        for keyword, phase in phase_keywords.items():
+            if keyword in text and phase not in self.phase_start_times:
+                self.phase_start_times[phase] = time.time()
+                if (
+                    self.current_phase != phase
+                    and self.current_phase not in self.completed_phases
+                ):
+                    self.completed_phases.append(self.current_phase)
+                self.current_phase = phase
+                break
 
     def check_progress(
         self, start_time: float, ctx: StageContext | None = None
@@ -81,13 +101,30 @@ class OutputMonitor:
             self.last_progress_time = now
             elapsed = int(now - start_time)
 
+            phase_start = self.phase_start_times.get(self.current_phase, start_time)
+            phase_elapsed = int(now - phase_start)
+
+            # Calculate durations for all completed phases
+            phase_durations = {}
+            phases = list(self.phase_start_times.keys())
+            for i, p in enumerate(phases):
+                if p == self.current_phase:
+                    phase_durations[p] = int(now - self.phase_start_times[p])
+                elif i < len(phases) - 1:
+                    next_p = phases[i + 1]
+                    phase_durations[p] = int(
+                        self.phase_start_times[next_p] - self.phase_start_times[p]
+                    )
+
             ctx.try_emit_event(
                 "agent.progress",
                 {
                     "item_id": self.item_id,
                     "elapsed_sec": elapsed,
                     "phase": self.current_phase,
+                    "phase_sec": phase_elapsed,
                     "bytes_received": self.total_bytes,
+                    "phase_durations": phase_durations,
                 },
             )
 
@@ -258,7 +295,12 @@ class RunAgentStage:
             f.write("=" * 50 + "\n\n")
 
         # Create output monitor for early warning detection
-        monitor = OutputMonitor(item_id, log_path)
+        initial_phase = (
+            checkpoint.phase.value
+            if checkpoint and checkpoint.phase != Phase.INIT
+            else "init"
+        )
+        monitor = OutputMonitor(item_id, log_path, initial_phase=initial_phase)
         self._monitors[item_id] = monitor
 
         # Emit start event
