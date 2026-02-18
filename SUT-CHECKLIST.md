@@ -130,7 +130,7 @@
 ## Tier 13: Constitution enforcement gates (Sprint 38)
 | ID | Target | Priority | Risk | Status |
 |----|--------|----------|------|--------|
-| ENF-001 | Manual `constitution check --project` severity matrix (hard/advisory/informational) with deterministic violation evidence and remediation hints | P0 | High | ☐ Not Started |
+| ENF-001 | Manual `constitution check --project` severity matrix (hard/advisory/informational) with deterministic violation evidence and remediation hints | P0 | High | ⏸️ Paused |
 | ENF-002 | Checkpoint boundary enforcement: hard violations block progression while advisory/informational outcomes remain visible and queryable | P0 | High | ☐ Not Started |
 | ENF-003 | Merge boundary governance gates: validate `merge prepare, approve, execute` behavior when constitution violations exist | P0 | High | ☐ Not Started |
 | ENF-004 | Violation history and retry loop inspectability across attempts; ensure causal linkage in events and attempt output | P0 | High | ☐ Not Started |
