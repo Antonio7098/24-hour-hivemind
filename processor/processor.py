@@ -176,7 +176,7 @@ class ChecklistProcessor:
                 "update_status",
                 self.update_status_stage,
                 StageKind.WORK,
-                dependencies=("validate_output",),
+                dependencies=("validate_output", "build_prompt"),
             )
         )
 
