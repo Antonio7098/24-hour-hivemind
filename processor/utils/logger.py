@@ -240,12 +240,7 @@ class CleanFormatter(logging.Formatter):
         phase_sec = extra.get("phase_sec", 0)
         completed_phases = extra.get("completed_phases", [])
 
-        # Build lines
         lines = []
-
-        # Header with item ID
-        header = f"{self._color('bold')}▶ {item_id}{self._reset()}"
-        lines.append(f"\n{header}")
 
         # Status line: iteration, completed, time
         iter_num = self._state["iteration"]
@@ -254,36 +249,30 @@ class CleanFormatter(logging.Formatter):
         completed = self._state["completed_count"]
         failed = self._state["failed_count"]
 
-        status_parts = []
-        status_parts.append(
-            f"iter {iter_num}/{max_iter}" if max_iter else f"iter {iter_num}"
-        )
-        status_parts.append(f"{iter_left} left" if isinstance(iter_left, int) else "")
-        status_parts.append(f"batch {self._state['batch_size']}")
-        status_parts.append(f"{self._color('green')}{completed} done{self._reset()}")
-        if failed > 0:
-            status_parts.append(f"{self._color('red')}{failed} fail{self._reset()}")
-        status_parts.append(f"{self._fmt_time(elapsed)}")
-
-        status_line = " │ ".join(p for p in status_parts if p)
-        lines.append(f"  {self._color('dim')}{status_line}{self._reset()}")
-
-        # Stages line
+        # Stages line - compact format
         stage_parts = []
         for p in self.PHASE_ORDER:
             if p in completed_phases:
-                stage_parts.append(f"{self._color('green')}[✓]{self._reset()} {p}")
+                stage_parts.append(f"{self._color('green')}{p}✓{self._reset()}")
             elif p == phase:
                 stage_parts.append(
-                    f"{self._color('yellow')}[→]{self._reset()} {p} {self._fmt_time(phase_sec)}"
+                    f"{self._color('yellow')}{p}:{self._fmt_time(phase_sec)}{self._reset()}"
                 )
             else:
-                stage_parts.append(f"{self._color('dim')}[ ] {p}{self._reset()}")
+                stage_parts.append(f"{self._color('dim')}{p}{self._reset()}")
 
-        stages_line = "  ".join(stage_parts)
-        lines.append(f"  {stages_line}")
+        stages_line = " → ".join(stage_parts)
 
-        return "\n".join(lines)
+        # Single compact line
+        status = f"{self._color('bold')}▶ {item_id}{self._reset()} "
+        status += f"{self._color('dim')}iter {iter_num}/{max_iter} │ {completed} done"
+        if failed > 0:
+            status += (
+                f" {self._color('red')}{failed} fail{self._reset()}{self._color('dim')}"
+            )
+        status += f" │ {self._fmt_time(elapsed)}{self._reset()}\n  {stages_line}"
+
+        return status
 
     def _format_observability(
         self, record: logging.LogRecord, message: str, extra: dict

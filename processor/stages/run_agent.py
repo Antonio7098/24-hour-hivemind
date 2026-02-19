@@ -113,7 +113,9 @@ class OutputMonitor:
                 extra={
                     "item_id": self.item_id,
                     "phase": self.current_phase,
+                    "phase_sec": phase_elapsed,
                     "elapsed": elapsed,
+                    "completed_phases": self.completed_phases,
                 },
             )
 
