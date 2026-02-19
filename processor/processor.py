@@ -412,20 +412,30 @@ class ChecklistProcessor:
         total_completed = 0
         total_failed = 0
         all_runs = []
+        items = []  # Initialize for logger
 
         try:
             iteration = 0
 
             while iteration < self.config.max_iterations and not self._cancelled:
                 iteration += 1
-                logger.info(
-                    f"Starting iteration {iteration}/{self.config.max_iterations}"
-                )
 
                 # Parse checklist (re-parse each iteration to get updated statuses)
                 items = self.parser.parse()
                 prefix_tier_map = self.parser.build_prefix_tier_map(items)
                 remaining = self.parser.get_remaining(items)
+
+                logger.info(
+                    f"Starting iteration {iteration}/{self.config.max_iterations}",
+                    extra={
+                        "iteration": iteration,
+                        "max_iterations": self.config.max_iterations,
+                        "batch_size": self.config.batch_size,
+                        "completed_count": total_completed,
+                        "total_count": len(items),
+                        "failed_count": total_failed,
+                    },
+                )
 
                 # Handle infinite mode - extend checklist if needed
                 if self.config.mode == ProcessingMode.INFINITE:

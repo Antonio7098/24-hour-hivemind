@@ -1,7 +1,7 @@
 """
 Structured logging setup for the Checklist Processor.
 
-Provides clean, user-friendly logging with tier/item/stage visibility.
+Provides clean, user-friendly logging with comprehensive status display.
 """
 
 import logging
@@ -21,6 +21,7 @@ class CleanFormatter(logging.Formatter):
         "red": "\033[31m",
         "magenta": "\033[35m",
         "bold": "\033[1m",
+        "blue": "\033[34m",
         "reset": "\033[0m",
     }
 
@@ -40,18 +41,60 @@ class CleanFormatter(logging.Formatter):
         "urllib3",
     }
 
+    # Phase order for display
+    PHASE_ORDER = ["init", "research", "tests", "execution", "report"]
+
     def __init__(self, use_colors: bool = True, verbose: bool = False):
         super().__init__()
         self.use_colors = use_colors and sys.stdout.isatty()
         self.verbose = verbose
-        self._last_tier = None
-        self._last_item = None
+        # Track state across log messages
+        self._state = {
+            "iteration": 0,
+            "max_iterations": 0,
+            "batch_size": 1,
+            "completed_count": 0,
+            "total_count": 0,
+            "failed_count": 0,
+            "session_start": None,
+            "current_item": None,
+            "current_item_start": None,
+        }
 
     def _color(self, name: str) -> str:
         return self.COLORS.get(name, "") if self.use_colors else ""
 
     def _reset(self) -> str:
         return self.COLORS["reset"] if self.use_colors else ""
+
+    def _fmt_time(self, seconds: int) -> str:
+        """Format seconds as M:SS or H:MM:SS."""
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            m, s = divmod(seconds, 60)
+            return f"{m}:{s:02d}"
+        else:
+            h, m = divmod(seconds // 60, 60)
+            s = seconds % 60
+            return f"{h}:{m:02d}:{s:02d}"
+
+    def _update_state(self, extra: dict) -> None:
+        """Update tracked state from extra data."""
+        if extra.get("iteration"):
+            self._state["iteration"] = extra["iteration"]
+        if extra.get("max_iterations"):
+            self._state["max_iterations"] = extra["max_iterations"]
+        if extra.get("batch_size"):
+            self._state["batch_size"] = extra["batch_size"]
+        if extra.get("completed_count") is not None:
+            self._state["completed_count"] = extra["completed_count"]
+        if extra.get("total_count"):
+            self._state["total_count"] = extra["total_count"]
+        if extra.get("failed_count") is not None:
+            self._state["failed_count"] = extra["failed_count"]
+        if extra.get("session_start"):
+            self._state["session_start"] = extra["session_start"]
 
     def format(self, record: logging.LogRecord) -> str:
         message = record.getMessage()
@@ -94,108 +137,67 @@ class CleanFormatter(logging.Formatter):
     def _format_processor(
         self, record: logging.LogRecord, message: str, extra: dict
     ) -> str:
-        """Format processor logs with tier/item context."""
-        lines = []
-
-        tier = extra.get("tier")
-        target = extra.get("target")
-        items = extra.get("items", [])
-        error_type = extra.get("error_type")
+        """Format processor logs."""
+        self._update_state(extra)
 
         if "Starting iteration" in message:
-            iteration = message.split("iteration")[1].split("/")[0].strip()
-            lines.append(
-                f"\n{self._color('bold')}━━━ Iteration {iteration} ━━━{self._reset()}"
-            )
-            return "\n".join(lines)
+            parts = message.split("iteration")[1].strip().split("/")
+            iteration = parts[0].strip()
+            max_iter = parts[1].strip() if len(parts) > 1 else "?"
+            self._state["iteration"] = int(iteration)
+            self._state["max_iterations"] = int(max_iter) if max_iter.isdigit() else 0
+            return ""
 
-        if "Starting" in message and tier:
+        if "Processing batch" in message:
+            return ""
+
+        if "Starting" in message and extra.get("tier"):
             item_id = message.split("Starting")[1].strip()
-            tier_short = (
-                tier.replace("Tier ", "T").split(":")[0] if ":" in tier else tier
-            )
-            lines.append(
-                f"\n{self._color('cyan')}▶ {item_id}{self._reset()} {self._color('dim')}[{tier_short}]{self._reset()}"
-            )
-            if target:
-                lines.append(f"  {self._color('dim')}Target: {target}{self._reset()}")
-            return "\n".join(lines)
+            self._state["current_item"] = item_id
+            self._state["current_item_start"] = datetime.now()
+            return ""
 
         if "Completed" in message:
-            item_id = message.split("Completed")[1].strip()
-            duration = extra.get("duration_ms", 0)
-            duration_sec = duration / 1000
-            lines.append(
-                f"  {self._color('green')}✓ Completed{self._reset()} {self._color('dim')}({duration_sec:.1f}s){self._reset()}"
-            )
-            return "\n".join(lines)
+            self._state["completed_count"] += 1
+            return ""
 
-        if "Failed" in message and error_type:
-            item_id = message.split("Failed")[1].split(":")[0].strip()
+        if "Failed" in message and extra.get("error_type"):
+            self._state["failed_count"] += 1
             error_msg = (
-                message.split(":", 1)[1].strip() if ":" in message else "Unknown error"
+                message.split(":", 1)[1].strip() if ":" in message else "Unknown"
             )
-            lines.append(f"  {self._color('red')}✗ Failed{self._reset()}")
-            lines.append(f"    {self._color('red')}Error: {error_msg}{self._reset()}")
-            return "\n".join(lines)
-
-        if "Processing batch" in message and items:
-            lines.append(
-                f"{self._color('dim')}Processing: {', '.join(items[:5])}{' ...' if len(items) > 5 else ''}{self._reset()}"
-            )
-            return "\n".join(lines)
+            return f"\n{self._color('red')}✗ {error_msg}{self._reset()}"
 
         if "Batch" in message and "complete" in message:
-            completed = (
-                message.split("completed")[0].split(",")[-1].strip().split()[0]
-                if "completed" in message
-                else "0"
-            )
-            failed = (
-                message.split("failed")[0].split(",")[-1].strip().split()[0]
-                if "failed" in message
-                else "0"
-            )
-            retry = (
-                "to retry" in message
-                and message.split("to retry")[0].split(",")[-1].strip().split()[0]
-                or "0"
-            )
-
-            status = f"{self._color('green')}✓ {completed} done{self._reset()}"
-            if int(failed) > 0:
-                status += f" {self._color('red')}✗ {failed} failed{self._reset()}"
-            if int(retry) > 0:
-                status += f" {self._color('yellow')}↻ {retry} retry{self._reset()}"
-            lines.append(status)
-            return "\n".join(lines)
+            return ""
 
         if "Processing complete" in message:
             processed = extra.get("processed", 0)
             completed = extra.get("completed", 0)
             failed = extra.get("failed", 0)
-            lines.append(f"\n{self._color('bold')}━━━ Summary ━━━{self._reset()}")
+            lines = [f"\n{self._color('bold')}━━━ Final Summary ━━━{self._reset()}"]
             lines.append(
                 f"  {self._color('green')}✓ Completed: {completed}{self._reset()}"
             )
             if failed > 0:
                 lines.append(f"  {self._color('red')}✗ Failed: {failed}{self._reset()}")
-            lines.append(f"  {self._color('dim')}Total: {processed}{self._reset()}")
+            lines.append(
+                f"  {self._color('dim')}Total processed: {processed}{self._reset()}"
+            )
             return "\n".join(lines)
 
         if "All checklist items are complete" in message:
             return f"\n{self._color('green')}✓ All items complete!{self._reset()}"
 
         if "Reached max iterations" in message:
-            return f"{self._color('yellow')}⚠ Reached max iterations{self._reset()}"
+            return f"\n{self._color('yellow')}⚠ Reached max iterations{self._reset()}"
 
         if "Prioritizing" in message and "checkpoints" in message:
             count = message.split()[1]
             return f"{self._color('yellow')}↻ Resuming {count} incomplete items{self._reset()}"
 
         if "Re-queued" in message:
-            count = message.split()[1]
-            return f"  {self._color('yellow')}↻ {count} items queued for retry{self._reset()}"
+            return ""
 
         if "DRY RUN" in message:
             return f"{self._color('cyan')}○ {message}{self._reset()}"
@@ -208,94 +210,93 @@ class CleanFormatter(logging.Formatter):
     def _format_run_agent(
         self, record: logging.LogRecord, message: str, extra: dict
     ) -> str:
-        """Format run_agent logs."""
+        """Format run_agent logs with comprehensive status panel."""
+
         if "Progress:" in message:
-            elapsed = extra.get("elapsed", 0)
-            phase = extra.get("phase", "working")
-            phase_sec = extra.get("phase_sec", 0)
-            completed = extra.get("completed_phases", [])
-
-            def fmt_time(s):
-                if s < 60:
-                    return f"{s}s"
-                m, s = s // 60, s % 60
-                return f"{m}:{s:02d}"
-
-            # Build progress line: completed phases with ✓, current phase with time
-            parts = []
-            for p in completed:
-                parts.append(f"{p} ✓")
-            parts.append(f"{phase} {fmt_time(phase_sec)}")
-
-            progress_line = " → ".join(parts)
-            total_str = fmt_time(elapsed)
-
-            return f"  {self._color('dim')}⏳ {progress_line} (total {total_str}){self._reset()}"
+            return self._format_status_panel(extra)
 
         if "Agent started" in message:
-            timeout = extra.get("timeout_sec", 0)
-            mins = timeout // 60
-            return f"  {self._color('dim')}⚙ Agent running (timeout: {mins}m){self._reset()}"
+            return ""
 
         if "Resuming" in message and "checkpoint" in message:
-            phase = message.split("phase=")[1] if "phase=" in message else "unknown"
-            return f"  {self._color('yellow')}↻ Resuming from {phase}{self._reset()}"
+            return ""
 
         if "Saved checkpoint" in message:
-            phase = message.split("phase=")[1] if "phase=" in message else ""
-            return f"  {self._color('dim')}Checkpoint saved: {phase}{self._reset()}"
+            return ""
 
         if "timed out" in message.lower():
-            attempt = ""
-            if "attempt" in message:
-                attempt = message.split("attempt")[1].split(")")[0].strip()
-                attempt = f" (attempt {attempt})"
-            return f"  {self._color('yellow')}⏱ Timeout{attempt}{self._reset()}"
+            return f"\n{self._color('yellow')}⏱ Timeout, retrying...{self._reset()}"
 
         if self.verbose:
             return f"{self._color('dim')}[run_agent] {message}{self._reset()}"
 
         return ""
 
+    def _format_status_panel(self, extra: dict) -> str:
+        """Format a comprehensive status panel."""
+        item_id = extra.get("item_id", "?")
+        elapsed = extra.get("elapsed", 0)
+        phase = extra.get("phase", "working")
+        phase_sec = extra.get("phase_sec", 0)
+        completed_phases = extra.get("completed_phases", [])
+
+        # Build lines
+        lines = []
+
+        # Header with item ID
+        header = f"{self._color('bold')}▶ {item_id}{self._reset()}"
+        lines.append(f"\n{header}")
+
+        # Status line: iteration, completed, time
+        iter_num = self._state["iteration"]
+        max_iter = self._state["max_iterations"]
+        iter_left = max_iter - iter_num if max_iter else "?"
+        completed = self._state["completed_count"]
+        failed = self._state["failed_count"]
+
+        status_parts = []
+        status_parts.append(
+            f"iter {iter_num}/{max_iter}" if max_iter else f"iter {iter_num}"
+        )
+        status_parts.append(f"{iter_left} left" if isinstance(iter_left, int) else "")
+        status_parts.append(f"batch {self._state['batch_size']}")
+        status_parts.append(f"{self._color('green')}{completed} done{self._reset()}")
+        if failed > 0:
+            status_parts.append(f"{self._color('red')}{failed} fail{self._reset()}")
+        status_parts.append(f"{self._fmt_time(elapsed)}")
+
+        status_line = " │ ".join(p for p in status_parts if p)
+        lines.append(f"  {self._color('dim')}{status_line}{self._reset()}")
+
+        # Stages line
+        stage_parts = []
+        for p in self.PHASE_ORDER:
+            if p in completed_phases:
+                stage_parts.append(f"{self._color('green')}[✓]{self._reset()} {p}")
+            elif p == phase:
+                stage_parts.append(
+                    f"{self._color('yellow')}[→]{self._reset()} {p} {self._fmt_time(phase_sec)}"
+                )
+            else:
+                stage_parts.append(f"{self._color('dim')}[ ] {p}{self._reset()}")
+
+        stages_line = "  ".join(stage_parts)
+        lines.append(f"  {stages_line}")
+
+        return "\n".join(lines)
+
     def _format_observability(
         self, record: logging.LogRecord, message: str, extra: dict
     ) -> str:
         """Format observability/stage logs."""
-        stage_name = extra.get("stage", "")
-        duration = extra.get("duration_ms", 0)
-
-        if "▶" in message:
-            return f"  {self._color('dim')}→ {stage_name}{self._reset()}"
-
-        if "✓" in message:
-            return f"  {self._color('green')}  ✓ {stage_name}{self._reset()} {self._color('dim')}({duration}ms){self._reset()}"
-
-        if "✗" in message:
-            error = extra.get("error", "")
-            return f"  {self._color('red')}  ✗ {stage_name}{self._reset()}\n    {self._color('red')}{error}{self._reset()}"
-
-        if "⊘" in message:
-            reason = extra.get("reason", "skipped")
-            return f"  {self._color('dim')}⊘ {stage_name}: {reason}{self._reset()}"
-
-        return ""
+        return ""  # Suppress these for cleaner output
 
     def _format_checkpoint(
         self, record: logging.LogRecord, message: str, extra: dict
     ) -> str:
         """Format checkpoint logs."""
-        if "Detected existing progress" in message:
-            phase = message.split("phase=")[1] if "phase=" in message else ""
-            item = (
-                message.split("for")[1].split(":")[0].strip()
-                if "for" in message
-                else ""
-            )
-            return f"  {self._color('yellow')}↻ Found checkpoint for {item}: {phase}{self._reset()}"
-
         if self.verbose:
             return f"{self._color('dim')}[checkpoint] {message}{self._reset()}"
-
         return ""
 
     def _format_error(
@@ -303,7 +304,7 @@ class CleanFormatter(logging.Formatter):
     ) -> str:
         """Format error messages with clear visibility."""
         lines = []
-        lines.append(f"\n{self._color('red')}{'─' * 50}{self._reset()}")
+        lines.append(f"\n{self._color('red')}{'─' * 60}{self._reset()}")
         lines.append(f"{self._color('red')}✗ ERROR{self._reset()}")
 
         if extra.get("item_id"):
@@ -321,7 +322,7 @@ class CleanFormatter(logging.Formatter):
         if extra.get("log_path"):
             lines.append(f"  Log: {extra['log_path']}")
 
-        lines.append(f"{self._color('red')}{'─' * 50}{self._reset()}")
+        lines.append(f"{self._color('red')}{'─' * 60}{self._reset()}")
 
         return "\n".join(lines)
 
