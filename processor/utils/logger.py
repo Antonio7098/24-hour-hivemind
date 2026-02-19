@@ -212,7 +212,8 @@ class CleanFormatter(logging.Formatter):
         if "Progress:" in message:
             elapsed = extra.get("elapsed", 0)
             phase = extra.get("phase", "working")
-            phase_durations = extra.get("phase_durations", {})
+            phase_sec = extra.get("phase_sec", 0)
+            completed = extra.get("completed_phases", [])
 
             def fmt_time(s):
                 if s < 60:
@@ -220,18 +221,16 @@ class CleanFormatter(logging.Formatter):
                 m, s = s // 60, s % 60
                 return f"{m}:{s:02d}"
 
-            # Build cumulative phase display
+            # Build progress line: completed phases with ✓, current phase with time
             parts = []
-            for p, dur in phase_durations.items():
-                if p == phase:
-                    parts.append(f"{p} {fmt_time(dur)}")
-                else:
-                    parts.append(f"{p} {fmt_time(dur)}")
+            for p in completed:
+                parts.append(f"{p} ✓")
+            parts.append(f"{phase} {fmt_time(phase_sec)}")
 
-            phase_line = " → ".join(parts) if parts else f"{phase} 0s"
+            progress_line = " → ".join(parts)
             total_str = fmt_time(elapsed)
 
-            return f"  {self._color('dim')}⏳ {phase_line} (total {total_str}){self._reset()}"
+            return f"  {self._color('dim')}⏳ {progress_line} (total {total_str}){self._reset()}"
 
         if "Agent started" in message:
             timeout = extra.get("timeout_sec", 0)

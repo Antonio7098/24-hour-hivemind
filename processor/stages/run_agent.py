@@ -41,18 +41,16 @@ class OutputMonitor:
         self.last_output_time = time.time()
         self.total_bytes = 0
         self.warnings_emitted: set[str] = set()
-        self.phase_start_times: dict[str, float] = {"init": time.time()}
+        self.phase_start_times: dict[str, float] = {}
         self.last_progress_time = time.time()
         self.current_phase = initial_phase
+        self.current_phase_start = time.time()
         self.completed_phases: list[str] = []
 
-        # If resuming from a specific phase, mark previous phases as completed
         phase_order = ["init", "research", "tests", "execution", "report"]
         if initial_phase in phase_order:
             idx = phase_order.index(initial_phase)
             self.completed_phases = phase_order[:idx]
-            for p in self.completed_phases:
-                self.phase_start_times[p] = time.time()
 
     def on_output(self, data: bytes, ctx: StageContext | None = None) -> None:
         """Called when output is received."""
@@ -82,14 +80,11 @@ class OutputMonitor:
         }
 
         for keyword, phase in phase_keywords.items():
-            if keyword in text and phase not in self.phase_start_times:
-                self.phase_start_times[phase] = time.time()
-                if (
-                    self.current_phase != phase
-                    and self.current_phase not in self.completed_phases
-                ):
+            if keyword in text and phase != self.current_phase:
+                if self.current_phase not in self.completed_phases:
                     self.completed_phases.append(self.current_phase)
                 self.current_phase = phase
+                self.current_phase_start = time.time()
                 break
 
     def check_progress(
@@ -100,21 +95,7 @@ class OutputMonitor:
         if now - self.last_progress_time >= PROGRESS_INTERVAL:
             self.last_progress_time = now
             elapsed = int(now - start_time)
-
-            phase_start = self.phase_start_times.get(self.current_phase, start_time)
-            phase_elapsed = int(now - phase_start)
-
-            # Calculate durations for all completed phases
-            phase_durations = {}
-            phases = list(self.phase_start_times.keys())
-            for i, p in enumerate(phases):
-                if p == self.current_phase:
-                    phase_durations[p] = int(now - self.phase_start_times[p])
-                elif i < len(phases) - 1:
-                    next_p = phases[i + 1]
-                    phase_durations[p] = int(
-                        self.phase_start_times[next_p] - self.phase_start_times[p]
-                    )
+            phase_elapsed = int(now - self.current_phase_start)
 
             ctx.try_emit_event(
                 "agent.progress",
@@ -123,8 +104,7 @@ class OutputMonitor:
                     "elapsed_sec": elapsed,
                     "phase": self.current_phase,
                     "phase_sec": phase_elapsed,
-                    "bytes_received": self.total_bytes,
-                    "phase_durations": phase_durations,
+                    "completed_phases": self.completed_phases,
                 },
             )
 
