@@ -125,13 +125,13 @@
 | CON-002 | `graph snapshot refresh` staleness recovery path: force stale/missing snapshot, confirm fail-loud behavior and actionable remediation hints | P0 | High | ✅ Completed |
 | CON-003 | Snapshot integrity contract: provoke UCP profile/fingerprint mismatch paths and verify explicit structured failure categories | P0 | High | ✅ Completed |
 | CON-004 | Non-constitution project non-regression run: ensure baseline flow execution works without mandatory constitution coupling | P0 | High | ✅ Completed |
-| CON-005 | Event telemetry quality audit for constitution and snapshot lifecycle (`started/completed/failed/diff_detected`) with correlation fidelity | P1 | Medium | ⏸️ Paused |
+| CON-005 | Event telemetry quality audit for constitution and snapshot lifecycle (`started/completed/failed/diff_detected`) with correlation fidelity | P1 | Medium | ✅ Completed |
 
 ## Tier 13: Constitution enforcement gates (Sprint 38)
 | ID | Target | Priority | Risk | Status |
 |----|--------|----------|------|--------|
-| ENF-001 | Manual `constitution check --project` severity matrix (hard/advisory/informational) with deterministic violation evidence and remediation hints | P0 | High | ⏸️ Paused |
-| ENF-002 | Checkpoint boundary enforcement: hard violations block progression while advisory/informational outcomes remain visible and queryable | P0 | High | ☐ Not Started |
+| ENF-001 | Manual `constitution check --project` severity matrix (hard/advisory/informational) with deterministic violation evidence and remediation hints | P0 | High | ✅ Completed |
+| ENF-002 | Checkpoint boundary enforcement: hard violations block progression while advisory/informational outcomes remain visible and queryable | P0 | High | ⏸️ Paused |
 | ENF-003 | Merge boundary governance gates: validate `merge prepare, approve, execute` behavior when constitution violations exist | P0 | High | ☐ Not Started |
 | ENF-004 | Violation history and retry loop inspectability across attempts; ensure causal linkage in events and attempt output | P0 | High | ☐ Not Started |
 | ENF-005 | Anti-magic assertions: prove no hidden retries or silent severity downgrades under repeated enforcement failures | P1 | Medium | ☐ Not Started |
