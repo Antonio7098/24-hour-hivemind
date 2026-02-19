@@ -240,12 +240,9 @@ class CleanFormatter(logging.Formatter):
         phase_sec = extra.get("phase_sec", 0)
         completed_phases = extra.get("completed_phases", [])
 
-        lines = []
-
         # Status line: iteration, completed, time
         iter_num = self._state["iteration"]
         max_iter = self._state["max_iterations"]
-        iter_left = max_iter - iter_num if max_iter else "?"
         completed = self._state["completed_count"]
         failed = self._state["failed_count"]
 
@@ -260,6 +257,12 @@ class CleanFormatter(logging.Formatter):
                 )
             else:
                 stage_parts.append(f"{self._color('dim')}{p}{self._reset()}")
+
+        # If current phase not in PHASE_ORDER, add it at the end
+        if phase not in self.PHASE_ORDER:
+            stage_parts.append(
+                f"{self._color('yellow')}{phase}:{self._fmt_time(phase_sec)}{self._reset()}"
+            )
 
         stages_line = " → ".join(stage_parts)
 
